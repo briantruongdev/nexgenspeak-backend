@@ -16,22 +16,14 @@ exports.lambdaHandler = async (event) => {
     // Get user by email
     const user = await getUserByEmail(email);
     if (!user) {
-      return createCorsResponse(401, { message: "Invalid credentials email" });
-    }
-
-    // Check if email is verified
-    if (!user.isVerified) {
-      return createCorsResponse(403, {
-        message:
-          "Email not verified. Please verify your email before logging in.",
-      });
+      return createCorsResponse(401, { message: "Invalid credentials" });
     }
 
     // Verify password
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return createCorsResponse(401, {
-        message: "Invalid credentials password",
+        message: "Invalid credentials",
       });
     }
 

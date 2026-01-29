@@ -1,13 +1,13 @@
 const { parseEventBody } = require("/opt/nodejs/common/utils");
 const {
-  createUser,
+  resetPassword,
   getUserByEmail,
 } = require("/opt/nodejs/db/repository/user-repository");
 const { createCorsResponse } = require("/opt/nodejs/common/cors");
 
 exports.lambdaHandler = async (event) => {
   try {
-    const { email, password } = event.body ? parseEventBody(event) : event;
+    const { email, newPassword } = event.body ? parseEventBody(event) : event;
 
     // Validate email
     if (!email || !email.trim()) {
@@ -20,33 +20,33 @@ exports.lambdaHandler = async (event) => {
       return createCorsResponse(400, { message: "Invalid email format" });
     }
 
-    // Validate password
-    if (!password || password.length < 6) {
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
       return createCorsResponse(400, {
-        message: "Password is required and must be at least 6 characters",
+        message: "New password is required and must be at least 6 characters",
       });
     }
 
-    // Check for existing user
+    // Check if user exists
     const existingUser = await getUserByEmail(email);
-    if (existingUser) {
-      return createCorsResponse(409, { message: "Email already registered" });
+    if (!existingUser) {
+      return createCorsResponse(404, {
+        message: "No account found with this email address",
+      });
     }
 
-    // Create user (auto-verified)
-    const user = await createUser({
-      email,
-      password,
-    });
+    // Reset password
+    const result = await resetPassword(email, newPassword);
 
     // Return success response
-    return createCorsResponse(201, {
-      message: "Registration successful. You can now login.",
-      userId: user.userId,
-      email: user.email,
+    return createCorsResponse(200, {
+      message:
+        "Password reset successful. You can now login with your new password.",
+      userId: result.userId,
+      email: result.email,
     });
   } catch (err) {
-    console.error("Registration error:", err);
+    console.error("Forgot password error:", err);
     return createCorsResponse(500, { message: "Internal server error" });
   }
 };

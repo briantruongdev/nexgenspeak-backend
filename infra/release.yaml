@@ -121,6 +121,12 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthSocialAuthLambda.Arn}/invocations"
+          /forgot-password:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthForgotPasswordLambda.Arn}/invocations"
 
   # ========================== POLICIES ================================
   FunctionsLogPolicy:
@@ -141,6 +147,7 @@ Resources:
         - !Ref AuthLoginRole
         - !Ref AuthRegisterRole
         - !Ref AuthVerifyOtpRole
+        - !Ref AuthForgotPasswordRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -264,6 +271,34 @@ Resources:
       Roles:
         - !Ref AuthVerifyOtpRole
 
+  AuthForgotPasswordPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBQueryUpdate
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref AuthForgotPasswordRole
+
   # ========================== ROLES ================================
   AuthLoginRole:
     Type: AWS::IAM::Role
@@ -329,6 +364,32 @@ Resources:
           ],
         ]
       Description: Role for Auth Verify OTP Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  AuthForgotPasswordRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Forgot Password Lambda
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -468,6 +529,34 @@ Resources:
           AWS: True
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
+
+  AuthForgotPasswordLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/auth/forgot-password
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthForgotPasswordRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          USERS_TABLE: !Ref AuthUserTable
+          EMAIL_INDEX: emailIndex
   # ========================== SNS NOTIFICATIONS ================================
   OTPNotificationTopic:
     Type: AWS::SNS::Topic
@@ -513,6 +602,14 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref AuthVerifyOtpLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  AuthForgotPasswordLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthForgotPasswordLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
@@ -584,6 +681,12 @@ Outputs:
     Value: !GetAtt AuthVerifyOtpLambda.Arn
     Export:
       Name: !Sub "${AWS::StackName}-AuthVerifyOtpLambdaArn"
+
+  AuthForgotPasswordLambdaArn:
+    Description: "Auth Forgot Password Lambda ARN"
+    Value: !GetAtt AuthForgotPasswordLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthForgotPasswordLambdaArn"
 
   # ========================== DYNAMODB OUTPUTS ================================
   AuthUserTableName:
