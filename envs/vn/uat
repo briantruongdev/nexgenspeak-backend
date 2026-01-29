@@ -1,0 +1,11 @@
+# ---------- COMMON ------------------------
+# ==========================================
+ArtifactStore="ngs-cloudformation"
+ArtifactPath="cloudformation/uat"
+
+AwsCliProfile="canh"
+AwsRegion="ap-southeast-1"
+AwsStackName="uat-ngs-backend-services"
+AppName="ngs-backend-services"
+EnvironmentCode="uat"
+CountryCode="vn"
