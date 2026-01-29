@@ -1,9 +1,9 @@
-AWSTemplateFormatVersion: 2026-01-29
+AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   NexGen Speak - Backend Service
 
 Transform:
-  - AWS::Serverless-2026-01-29
+  - AWS::Serverless-2016-10-31
 
 # ====================================================================
 #                     PARAMETERS
@@ -17,7 +17,6 @@ Parameters:
       - "dev"
       - "uat"
       - "prod"
-    Default: "dev"
 
   CountryCode:
     Type: String
@@ -25,29 +24,31 @@ Parameters:
     AllowedPattern: ".+"
     AllowedValues:
       - "vn"
-    Default: "vn"
 
   AppName:
     Type: String
     Description: "Name of application"
-    Default: "nexgenspeak-backend-service"
     AllowedPattern: ".+"
 
   AwsRegion:
     Type: String
     Description: "AWS Region"
-    Default: "ap-southeast-1"
     AllowedPattern: ".+"
-    AllowedValues:
-      - "ap-southeast-1"
-      - "ap-southeast-2"
-      - "ap-northeast-1"
 
+  # Authentication Configuration (from dev.env)
   JwtSecret:
     Type: String
     Description: "JWT signing secret"
     NoEcho: true
-    Default: "CHANGE_ME_TO_A_SECURE_VALUE"
+
+  EmailFrom:
+    Type: String
+    Description: "Sender email address for SES (must be verified in SES)"
+
+  OtpExpiredMinutes:
+    Type: Number
+    Description: "OTP expiration time in minutes"
+    Default: 5
 
 Conditions:
   ConditionUseDev: !Equals
@@ -108,6 +109,12 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthRegisterLambda.Arn}/invocations"
+          /verify-otp:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthVerifyOtpLambda.Arn}/invocations"
           /social-auth:
             post:
               x-amazon-apigateway-integration:
@@ -133,7 +140,7 @@ Resources:
       Roles:
         - !Ref AuthLoginRole
         - !Ref AuthRegisterRole
-        - !Ref TrialRequestsRole
+        - !Ref AuthVerifyOtpRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -187,30 +194,18 @@ Resources:
             Resource:
               - !GetAtt AuthUserTable.Arn
               - !Sub "${AuthUserTable.Arn}/index/emailIndex"
-      Roles:
-        - !Ref AuthRegisterRole
-
-  AuthPostRegistrationPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "auth-post-registration",
-            !Ref CountryCode,
-            "policy",
-          ],
-        ]
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
+          - Sid: AllowSESSendEmail
+            Effect: Allow
             Action:
-              - dynamodb:UpdateItem
-            Resource: !GetAtt AuthUserTable.Arn
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource: "*"
+          - Sid: AllowSNSPublish
+            Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - !Ref OTPNotificationTopic
       Roles:
         - !Ref AuthRegisterRole
 
@@ -240,6 +235,35 @@ Resources:
               - !Sub "${AuthUserTable.Arn}/index/emailIndex"
       Roles:
         - !Ref AuthLoginRole
+
+  AuthVerifyOtpPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-verify-otp",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBQueryUpdate
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref AuthVerifyOtpRole
+
   # ========================== ROLES ================================
   AuthLoginRole:
     Type: AWS::IAM::Role
@@ -288,6 +312,32 @@ Resources:
             Principal:
               Service: [lambda.amazonaws.com]
             Action: sts:AssumeRole
+      Path: /
+
+  AuthVerifyOtpRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-verify-otp",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Verify OTP Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
       Path: /
 
   # ========================== Lambda Layers ================================
@@ -362,6 +412,9 @@ Resources:
           JWT_SECRET: !Ref JwtSecret
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
+          EMAIL_FROM: !Ref EmailFrom
+          OTP_EXPIRED_MINUTES: !Ref OtpExpiredMinutes
+          OTP_NOTIFICATION_TOPIC_ARN: !Ref OTPNotificationTopic
 
   AuthSocialAuthLambda:
     Type: AWS::Serverless::Function
@@ -388,7 +441,7 @@ Resources:
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
 
-  AuthPostRegistrationLambda:
+  AuthVerifyOtpLambda:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
@@ -397,47 +450,26 @@ Resources:
           [
             !Ref EnvironmentCode,
             !Ref AppName,
-            "auth-post-registration",
+            "auth-verify-otp",
             !Ref CountryCode,
           ],
         ]
-      CodeUri: ../src/lambdas/auth/post-registration
+      CodeUri: ../src/lambdas/auth/verify-otp
       Handler: app.lambdaHandler
-      Role: !GetAtt AuthRegisterRole.Arn
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthVerifyOtpRole.Arn
       Layers:
         - !Ref SharedLayer
       Environment:
         Variables:
           AWS: True
-          JWT_SECRET: !Ref JwtSecret
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
-
-  TrialRequestsLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "trial-requests",
-            !Ref CountryCode,
-          ],
-        ]
-      CodeUri: ../src/lambdas/trial-requests
-      Handler: app.lambdaHandler
-      Role: !GetAtt TrialRequestsRole.Arn
-      Layers:
-        - !Ref SharedLayer
-      Environment:
-        Variables:
-          AWS: True
-          TRIAL_REQUESTS_TABLE: !Ref TrialRequestsTable
-          TRIAL_NOTIFICATION_TOPIC_ARN: !Ref TrialRequestsNotificationTopic
   # ========================== SNS NOTIFICATIONS ================================
-  TrialRequestsNotificationTopic:
+  OTPNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName:
@@ -446,11 +478,11 @@ Resources:
           [
             !Ref EnvironmentCode,
             !Ref AppName,
-            "trial-requests-notifications",
+            "otp-notifications",
             !Ref CountryCode,
           ],
         ]
-      DisplayName: "Trial Requests Notifications"
+      DisplayName: "OTP Email Notifications"
 
   # ========================== LAMBDA PERMISSIONS ================================
   AuthLoginLambdaPermission:
@@ -477,18 +509,10 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
 
-  AuthPostRegistrationLambdaPermission:
+  AuthVerifyOtpLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref AuthPostRegistrationLambda
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-
-  TrialRequestsLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref TrialRequestsLambda
+      FunctionName: !Ref AuthVerifyOtpLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
@@ -555,17 +579,11 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-AuthSocialAuthLambdaArn"
 
-  AuthPostRegistrationLambdaArn:
-    Description: "Auth Post Registration Lambda ARN"
-    Value: !GetAtt AuthPostRegistrationLambda.Arn
+  AuthVerifyOtpLambdaArn:
+    Description: "Auth Verify OTP Lambda ARN"
+    Value: !GetAtt AuthVerifyOtpLambda.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-AuthPostRegistrationLambdaArn"
-
-  TrialRequestsLambdaArn:
-    Description: "Trial Requests Lambda ARN"
-    Value: !GetAtt TrialRequestsLambda.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-TrialRequestsLambdaArn"
+      Name: !Sub "${AWS::StackName}-AuthVerifyOtpLambdaArn"
 
   # ========================== DYNAMODB OUTPUTS ================================
   AuthUserTableName:
@@ -574,15 +592,9 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-AuthUserTableName"
 
-  TrialRequestsTableName:
-    Description: "Trial Requests Table Name"
-    Value: !Ref TrialRequestsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-TrialRequestsTableName"
-
   # ========================== SNS OUTPUTS ================================
-  TrialRequestsNotificationTopicArn:
-    Description: "Trial Requests Notification Topic ARN"
-    Value: !Ref TrialRequestsNotificationTopic
+  OTPNotificationTopicArn:
+    Description: "OTP Notification Topic ARN"
+    Value: !Ref OTPNotificationTopic
     Export:
-      Name: !Sub "${AWS::StackName}-TrialRequestsNotificationTopicArn"
+      Name: !Sub "${AWS::StackName}-OTPNotificationTopicArn"

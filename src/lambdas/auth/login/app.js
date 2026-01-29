@@ -5,19 +5,52 @@ const { getUserByEmail } = require("/opt/nodejs/db/repository/user-repository");
 const { createCorsResponse } = require("/opt/nodejs/common/cors");
 
 exports.lambdaHandler = async (event) => {
-  const { email, password } = event.body ? parseEventBody(event) : event;
-  if (!email || !password)
-    return createCorsResponse(400, { message: "Missing credentials" });
+  try {
+    const { email, password } = event.body ? parseEventBody(event) : event;
 
-  const user = await getUserByEmail(email);
-  if (!user) {
-    return createCorsResponse(401, { message: "Invalid credentials" });
+    // Validate input
+    if (!email || !password) {
+      return createCorsResponse(400, { message: "Missing credentials" });
+    }
+
+    // Get user by email
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return createCorsResponse(401, { message: "Invalid credentials email" });
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      return createCorsResponse(403, {
+        message:
+          "Email not verified. Please verify your email before logging in.",
+      });
+    }
+
+    // Verify password
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return createCorsResponse(401, {
+        message: "Invalid credentials password",
+      });
+    }
+
+    // Generate JWT token (expires in 7 days)
+    const token = await generateToken(
+      { sub: user.userId, email: user.email },
+      "7d",
+    );
+
+    return createCorsResponse(200, {
+      message: "Login successful",
+      token,
+      user: {
+        userId: user.userId,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return createCorsResponse(500, { message: "Internal server error" });
   }
-
-  const match = await bcrypt.compare(password, user.password);
-  if (!match)
-    return createCorsResponse(401, { message: "Invalid credentials" });
-
-  const token = await generateToken({ sub: user.userId, email });
-  return createCorsResponse(200, { token });
 };

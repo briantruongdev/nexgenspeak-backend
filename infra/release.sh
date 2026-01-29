@@ -165,7 +165,7 @@ runDeployment() {
     verifyInstallation
     installAllDependencies
     # Build SAM project
-    sam build --template-file ./release.yaml
+    sam.cmd build --template-file ./release.yaml
 
     # Run SAM deploy with dynamic parameters
     local parameter_overrides
@@ -192,7 +192,7 @@ runDeployment() {
         aws_region=$(getVar AwsRegion)
     fi
 
-    sam deploy --template-file ./.aws-sam/build/template.yaml \
+    sam.cmd deploy --template-file ./.aws-sam/build/template.yaml \
         --profile  $aws_cli_profile  \
         --s3-bucket $aws_artifact_store \
         --s3-prefix  $aws_artifact_path  \
