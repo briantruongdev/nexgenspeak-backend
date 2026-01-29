@@ -45,11 +45,6 @@ Parameters:
     Type: String
     Description: "Sender email address for SES (must be verified in SES)"
 
-  OtpExpiredMinutes:
-    Type: Number
-    Description: "OTP expiration time in minutes"
-    Default: 5
-
 Conditions:
   ConditionUseDev: !Equals
     - !Ref EnvironmentCode
@@ -109,12 +104,6 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthRegisterLambda.Arn}/invocations"
-          /verify-otp:
-            post:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthVerifyOtpLambda.Arn}/invocations"
           /social-auth:
             post:
               x-amazon-apigateway-integration:
@@ -146,7 +135,7 @@ Resources:
       Roles:
         - !Ref AuthLoginRole
         - !Ref AuthRegisterRole
-        - !Ref AuthVerifyOtpRole
+        - !Ref AuthSocialAuthRole
         - !Ref AuthForgotPasswordRole
 
   AuthLoginPolicy:
@@ -207,14 +196,34 @@ Resources:
               - ses:SendEmail
               - ses:SendRawEmail
             Resource: "*"
-          - Sid: AllowSNSPublish
-            Effect: Allow
-            Action:
-              - sns:Publish
-            Resource:
-              - !Ref OTPNotificationTopic
       Roles:
         - !Ref AuthRegisterRole
+
+  AuthSocialAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-social-auth",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Social Auth Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
 
   AuthSocialAuthPolicy:
     Type: AWS::IAM::Policy
@@ -237,39 +246,12 @@ Resources:
             Effect: Allow
             Action:
               - dynamodb:Query
+              - dynamodb:PutItem
             Resource:
               - !GetAtt AuthUserTable.Arn
               - !Sub "${AuthUserTable.Arn}/index/emailIndex"
       Roles:
-        - !Ref AuthLoginRole
-
-  AuthVerifyOtpPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "auth-verify-otp",
-            !Ref CountryCode,
-            "policy",
-          ],
-        ]
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowDDBQueryUpdate
-            Effect: Allow
-            Action:
-              - dynamodb:Query
-              - dynamodb:UpdateItem
-            Resource:
-              - !GetAtt AuthUserTable.Arn
-              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
-      Roles:
-        - !Ref AuthVerifyOtpRole
+        - !Ref AuthSocialAuthRole
 
   AuthForgotPasswordPolicy:
     Type: AWS::IAM::Policy
@@ -347,32 +329,6 @@ Resources:
             Principal:
               Service: [lambda.amazonaws.com]
             Action: sts:AssumeRole
-      Path: /
-
-  AuthVerifyOtpRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "auth-verify-otp",
-            !Ref CountryCode,
-            "role",
-          ],
-        ]
-      Description: Role for Auth Verify OTP Lambda
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      MaxSessionDuration: 3600
       Path: /
 
   AuthForgotPasswordRole:
@@ -474,8 +430,6 @@ Resources:
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
           EMAIL_FROM: !Ref EmailFrom
-          OTP_EXPIRED_MINUTES: !Ref OtpExpiredMinutes
-          OTP_NOTIFICATION_TOPIC_ARN: !Ref OTPNotificationTopic
 
   AuthSocialAuthLambda:
     Type: AWS::Serverless::Function
@@ -492,41 +446,17 @@ Resources:
         ]
       CodeUri: ../src/lambdas/auth/social-auth
       Handler: app.lambdaHandler
-      Role: !GetAtt AuthLoginRole.Arn
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthSocialAuthRole.Arn
       Layers:
         - !Ref SharedLayer
       Environment:
         Variables:
           AWS: True
           JWT_SECRET: !Ref JwtSecret
-          USERS_TABLE: !Ref AuthUserTable
-          EMAIL_INDEX: emailIndex
-
-  AuthVerifyOtpLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "auth-verify-otp",
-            !Ref CountryCode,
-          ],
-        ]
-      CodeUri: ../src/lambdas/auth/verify-otp
-      Handler: app.lambdaHandler
-      Runtime: nodejs20.x
-      MemorySize: 256
-      Timeout: 600
-      Tracing: Active
-      Role: !GetAtt AuthVerifyOtpRole.Arn
-      Layers:
-        - !Ref SharedLayer
-      Environment:
-        Variables:
-          AWS: True
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
 
@@ -557,22 +487,6 @@ Resources:
           AWS: True
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
-  # ========================== SNS NOTIFICATIONS ================================
-  OTPNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName:
-        !Join [
-          "-",
-          [
-            !Ref EnvironmentCode,
-            !Ref AppName,
-            "otp-notifications",
-            !Ref CountryCode,
-          ],
-        ]
-      DisplayName: "OTP Email Notifications"
-
   # ========================== LAMBDA PERMISSIONS ================================
   AuthLoginLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -594,14 +508,6 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref AuthSocialAuthLambda
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-
-  AuthVerifyOtpLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref AuthVerifyOtpLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
@@ -676,12 +582,6 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-AuthSocialAuthLambdaArn"
 
-  AuthVerifyOtpLambdaArn:
-    Description: "Auth Verify OTP Lambda ARN"
-    Value: !GetAtt AuthVerifyOtpLambda.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-AuthVerifyOtpLambdaArn"
-
   AuthForgotPasswordLambdaArn:
     Description: "Auth Forgot Password Lambda ARN"
     Value: !GetAtt AuthForgotPasswordLambda.Arn
@@ -694,10 +594,3 @@ Outputs:
     Value: !Ref AuthUserTable
     Export:
       Name: !Sub "${AWS::StackName}-AuthUserTableName"
-
-  # ========================== SNS OUTPUTS ================================
-  OTPNotificationTopicArn:
-    Description: "OTP Notification Topic ARN"
-    Value: !Ref OTPNotificationTopic
-    Export:
-      Name: !Sub "${AWS::StackName}-OTPNotificationTopicArn"
