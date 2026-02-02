@@ -165,7 +165,7 @@ runDeployment() {
     verifyInstallation
     installAllDependencies
     # Build SAM project
-    sam.cmd build --template-file ./release.yaml
+    sam build --template-file ./release.yaml
 
     # Run SAM deploy with dynamic parameters
     local parameter_overrides
@@ -181,18 +181,18 @@ runDeployment() {
         aws_cli_profile=$(getVar DcpCliProfile)
         aws_artifact_store=$(getVar DcpS3CfBucket)
         aws_artifact_path=$(getVar ArtifactPath)
-        aws_stack_name=$(getVar AwsStackName)
+        aws_stack_name="$(getVar AwsStackName)-$(getVar CountryCode)"
         aws_region=$(getVar AwsRegion)
 
     else
         aws_cli_profile=$(getVar AwsCliProfile)
         aws_artifact_store=$(getVar ArtifactStore)
         aws_artifact_path=$(getVar ArtifactPath)
-        aws_stack_name=$(getVar AwsStackName)
+        aws_stack_name="$(getVar AwsStackName)-$(getVar CountryCode)"
         aws_region=$(getVar AwsRegion)
     fi
 
-    sam.cmd deploy --template-file ./.aws-sam/build/template.yaml \
+    sam deploy --template-file ./.aws-sam/build/template.yaml \
         --profile  $aws_cli_profile  \
         --s3-bucket $aws_artifact_store \
         --s3-prefix  $aws_artifact_path  \

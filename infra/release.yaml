@@ -460,7 +460,6 @@ Resources:
           AWS: True
           JWT_SECRET: !Ref JwtSecret
           USERS_TABLE: !Ref AuthUserTable
-          EMAIL_INDEX: emailIndex
 
   AuthRegisterLambda:
     Type: AWS::Serverless::Function
@@ -489,8 +488,6 @@ Resources:
           AWS: True
           JWT_SECRET: !Ref JwtSecret
           USERS_TABLE: !Ref AuthUserTable
-          EMAIL_INDEX: emailIndex
-          EMAIL_FROM: !Ref EmailFrom
 
   AuthSocialAuthLambda:
     Type: AWS::Serverless::Function
@@ -519,7 +516,6 @@ Resources:
           AWS: True
           JWT_SECRET: !Ref JwtSecret
           USERS_TABLE: !Ref AuthUserTable
-          EMAIL_INDEX: emailIndex
 
   AuthForgotPasswordLambda:
     Type: AWS::Serverless::Function
@@ -547,7 +543,6 @@ Resources:
         Variables:
           AWS: True
           USERS_TABLE: !Ref AuthUserTable
-          EMAIL_INDEX: emailIndex
   TrialRequestsLambda:
     Type: AWS::Serverless::Function
     Properties:

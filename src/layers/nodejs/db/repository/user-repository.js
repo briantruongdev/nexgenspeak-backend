@@ -1,8 +1,6 @@
 const { getDynamoClient } = require("../dynamo-client");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcryptjs");
-
-const EMAIL_INDEX = "emailIndex";
 const tableName = process.env.USERS_TABLE;
 
 const getUserByEmail = async (email) => {
@@ -10,7 +8,6 @@ const getUserByEmail = async (email) => {
   const res = await db
     .query({
       TableName: tableName,
-      IndexName: EMAIL_INDEX,
       KeyConditionExpression: "email = :e",
       ExpressionAttributeValues: { ":e": email },
       Limit: 1,
