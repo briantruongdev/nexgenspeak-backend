@@ -8,6 +8,7 @@ const getUserByEmail = async (email) => {
   const res = await db
     .query({
       TableName: tableName,
+      IndexName: "emailIndex",
       KeyConditionExpression: "email = :e",
       ExpressionAttributeValues: { ":e": email },
       Limit: 1,
