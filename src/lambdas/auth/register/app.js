@@ -7,7 +7,9 @@ const { createCorsResponse } = require("/opt/nodejs/common/cors");
 
 exports.lambdaHandler = async (event) => {
   try {
-    const { email, password } = event.body ? parseEventBody(event) : event;
+    const { email, password, phone } = event.body
+      ? parseEventBody(event)
+      : event;
 
     // Validate email
     if (!email || !email.trim()) {
@@ -27,6 +29,18 @@ exports.lambdaHandler = async (event) => {
       });
     }
 
+    if (!phone || !phone.trim()) {
+      return createCorsResponse(400, { message: "Phone is required" });
+    }
+
+    // Validate phone (optional but if provided must be valid)
+    const phoneRegex = /^(\+84|0)[1-9][0-9]{8,9}$/;
+    if (!phoneRegex.test(phone)) {
+      return createCorsResponse(400, {
+        message: "Invalid phone format.",
+      });
+    }
+
     // Check for existing user
     const existingUser = await getUserByEmail(email);
     if (existingUser) {
@@ -37,6 +51,7 @@ exports.lambdaHandler = async (event) => {
     const user = await createUser({
       email,
       password,
+      phone,
     });
 
     // Return success response
@@ -44,6 +59,7 @@ exports.lambdaHandler = async (event) => {
       message: "Registration successful. You can now login.",
       userId: user.userId,
       email: user.email,
+      phone: user.phone,
     });
   } catch (err) {
     console.error("Registration error:", err);

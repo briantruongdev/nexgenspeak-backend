@@ -17,12 +17,13 @@ const getUserByEmail = async (email) => {
   return res.Items && res.Items[0];
 };
 
-const createUser = async ({ email, password }) => {
+const createUser = async ({ email, password, phone }) => {
   const db = getDynamoClient();
   const userId = uuidv4();
   const item = {
     userId,
     email,
+    phone,
     createdAt: new Date().toISOString(),
   };
   if (password) {
