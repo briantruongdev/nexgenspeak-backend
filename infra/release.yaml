@@ -17,6 +17,7 @@ Parameters:
       - "dev"
       - "uat"
       - "prod"
+    Default: "dev"
 
   CountryCode:
     Type: String
@@ -24,26 +25,28 @@ Parameters:
     AllowedPattern: ".+"
     AllowedValues:
       - "vn"
+    Default: "vn"
 
   AppName:
     Type: String
     Description: "Name of application"
+    Default: "nexgenspeak-backend-services"
     AllowedPattern: ".+"
 
   AwsRegion:
     Type: String
     Description: "AWS Region"
+    Default: "ap-southeast-1"
     AllowedPattern: ".+"
+    AllowedValues:
+      - "ap-southeast-1"
+      - "ap-southeast-2"
+      - "ap-northeast-1"
 
-  # Authentication Configuration (from dev.env)
   JwtSecret:
     Type: String
     Description: "JWT signing secret"
     NoEcho: true
-
-  EmailFrom:
-    Type: String
-    Description: "Sender email address for SES (must be verified in SES)"
 
 Conditions:
   ConditionUseDev: !Equals
@@ -116,6 +119,12 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthForgotPasswordLambda.Arn}/invocations"
+          /trial-requests:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TrialRequestsLambda.Arn}/invocations"
 
   # ========================== POLICIES ================================
   FunctionsLogPolicy:
@@ -280,6 +289,33 @@ Resources:
               - !Sub "${AuthUserTable.Arn}/index/emailIndex"
       Roles:
         - !Ref AuthForgotPasswordRole
+  TrialRequestsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource: !GetAtt TrialRequestsTable.Arn
+          - Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref TrialRequestsNotificationTopic
+      Roles:
+        - !Ref TrialRequestsRole
 
   # ========================== ROLES ================================
   AuthLoginRole:
@@ -346,6 +382,31 @@ Resources:
           ],
         ]
       Description: Role for Auth Forgot Password Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+  TrialRequestsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Lambda trial-requests only
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -487,6 +548,45 @@ Resources:
           AWS: True
           USERS_TABLE: !Ref AuthUserTable
           EMAIL_INDEX: emailIndex
+  TrialRequestsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/trial-requests
+      Handler: app.lambdaHandler
+      Role: !GetAtt TrialRequestsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          TRIAL_REQUESTS_TABLE: !Ref TrialRequestsTable
+          TRIAL_NOTIFICATION_TOPIC_ARN: !Ref TrialRequestsNotificationTopic
+
+  # ========================== SNS NOTIFICATIONS ================================
+  TrialRequestsNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests-notifications",
+            !Ref CountryCode,
+          ],
+        ]
+      DisplayName: "Trial Requests Notifications"
   # ========================== LAMBDA PERMISSIONS ================================
   AuthLoginLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -519,7 +619,13 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-
+  TrialRequestsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TrialRequestsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
   # ========================== DynamoDB =====================================
   AuthUserTable:
     Type: AWS::DynamoDB::Table
@@ -548,7 +654,36 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-
+  TrialRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        !Join ["-", [!Ref AWS::StackName, "trial-requests", !Ref CountryCode]]
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [ConditionUseProd, true, false]
+      AttributeDefinitions:
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: phone
+          AttributeType: S
+      KeySchema:
+        - AttributeName: requestId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: emailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: phoneIndex
+          KeySchema:
+            - AttributeName: phone
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 Outputs:
   # ========================== API GATEWAY OUTPUTS ================================
   ApiGatewayUrl:
@@ -587,10 +722,26 @@ Outputs:
     Value: !GetAtt AuthForgotPasswordLambda.Arn
     Export:
       Name: !Sub "${AWS::StackName}-AuthForgotPasswordLambdaArn"
-
+  TrialRequestsLambdaArn:
+    Description: "Trial Requests Lambda ARN"
+    Value: !GetAtt TrialRequestsLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsLambdaArn"
   # ========================== DYNAMODB OUTPUTS ================================
   AuthUserTableName:
     Description: "Auth User Table Name"
     Value: !Ref AuthUserTable
     Export:
       Name: !Sub "${AWS::StackName}-AuthUserTableName"
+  TrialRequestsTableName:
+    Description: "Trial Requests Table Name"
+    Value: !Ref TrialRequestsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsTableName"
+
+  # ========================== SNS OUTPUTS ================================
+  TrialRequestsNotificationTopicArn:
+    Description: "Trial Requests Notification Topic ARN"
+    Value: !Ref TrialRequestsNotificationTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsNotificationTopicArn"
