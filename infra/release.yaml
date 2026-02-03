@@ -1,0 +1,742 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  NexGen Speak - Backend Service
+
+Transform:
+  - AWS::Serverless-2016-10-31
+
+# ====================================================================
+#                     PARAMETERS
+# ====================================================================
+Parameters:
+  EnvironmentCode:
+    Type: String
+    Description: "Environment code"
+    AllowedPattern: ".+"
+    AllowedValues:
+      - "dev"
+      - "uat"
+      - "prod"
+    Default: "dev"
+
+  CountryCode:
+    Type: String
+    Description: "Country code"
+    AllowedPattern: ".+"
+    AllowedValues:
+      - "vn"
+    Default: "vn"
+
+  AppName:
+    Type: String
+    Description: "Name of application"
+    Default: "nexgenspeak-backend-services"
+    AllowedPattern: ".+"
+
+  AwsRegion:
+    Type: String
+    Description: "AWS Region"
+    Default: "ap-southeast-1"
+    AllowedPattern: ".+"
+    AllowedValues:
+      - "ap-southeast-1"
+      - "ap-southeast-2"
+      - "ap-northeast-1"
+
+  JwtSecret:
+    Type: String
+    Description: "JWT signing secret"
+    NoEcho: true
+
+Conditions:
+  ConditionUseDev: !Equals
+    - !Ref EnvironmentCode
+    - dev
+  ConditionUseProd: !Equals
+    - !Ref EnvironmentCode
+    - prod
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 600
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        AWS: True
+        ENV: !Ref EnvironmentCode
+        COUNTRY_CODE: !Ref CountryCode
+        APP_NAME: !Ref AppName
+        APP_REGION: !Ref AwsRegion
+
+Resources:
+  # ========================== API GATEWAY ================================
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        !Join [
+          "-",
+          [!Ref EnvironmentCode, !Ref AppName, "api", !Ref CountryCode],
+        ]
+      StageName: !Ref EnvironmentCode
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      DefinitionBody:
+        openapi: "3.0.1"
+        info:
+          title:
+            !Join [
+              "-",
+              [!Ref EnvironmentCode, !Ref AppName, "api", !Ref CountryCode],
+            ]
+          version: "1.0"
+        paths:
+          /login:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthLoginLambda.Arn}/invocations"
+          /register:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthRegisterLambda.Arn}/invocations"
+          /social-auth:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthSocialAuthLambda.Arn}/invocations"
+          /forgot-password:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthForgotPasswordLambda.Arn}/invocations"
+          /trial-requests:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TrialRequestsLambda.Arn}/invocations"
+
+  # ========================== POLICIES ================================
+  FunctionsLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join ["-", [!Ref EnvironmentCode, !Ref AppName, "access-logs"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "arn:aws:logs:*:*:*"
+      Roles:
+        - !Ref AuthLoginRole
+        - !Ref AuthRegisterRole
+        - !Ref AuthSocialAuthRole
+        - !Ref AuthForgotPasswordRole
+
+  AuthLoginPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-login",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBQuery
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref AuthLoginRole
+
+  AuthRegisterPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-register",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBPut
+            Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:Query
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+          - Sid: AllowSESSendEmail
+            Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource: "*"
+      Roles:
+        - !Ref AuthRegisterRole
+
+  AuthSocialAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-social-auth",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Social Auth Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  AuthSocialAuthPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-social-auth",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBQuery
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref AuthSocialAuthRole
+
+  AuthForgotPasswordPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowDDBQueryUpdate
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref AuthForgotPasswordRole
+  TrialRequestsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource: !GetAtt TrialRequestsTable.Arn
+          - Effect: Allow
+            Action:
+              - sns:Publish
+            Resource: !Ref TrialRequestsNotificationTopic
+      Roles:
+        - !Ref TrialRequestsRole
+
+  # ========================== ROLES ================================
+  AuthLoginRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-login",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Login Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  AuthRegisterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-register",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      Path: /
+
+  AuthForgotPasswordRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Auth Forgot Password Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+  TrialRequestsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Lambda trial-requests only
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  # ========================== Lambda Layers ================================
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "shared-layer",
+            !Ref CountryCode,
+          ],
+        ]
+      Description: Dependencies for NexgenSpeak Backend Service.
+      ContentUri: ../src/layers/
+      CompatibleRuntimes: ["nodejs20.x"]
+      LicenseInfo: "MIT"
+      RetentionPolicy: Retain
+  # ========================== LAMBDA =======================================
+  AuthLoginLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [!Ref EnvironmentCode, !Ref AppName, "auth-login", !Ref CountryCode],
+        ]
+      CodeUri: ../src/lambdas/auth/login
+      Role: !GetAtt AuthLoginRole.Arn
+      Handler: app.lambdaHandler
+      MemorySize: 256
+      Timeout: 600
+      Runtime: nodejs20.x
+      Tracing: Active
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  AuthRegisterLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-register",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/auth/register
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthRegisterRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  AuthSocialAuthLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-social-auth",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/auth/social-auth
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthSocialAuthRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  AuthForgotPasswordLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "auth-forgot-password",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/auth/forgot-password
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt AuthForgotPasswordRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          USERS_TABLE: !Ref AuthUserTable
+  TrialRequestsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/trial-requests
+      Handler: app.lambdaHandler
+      Role: !GetAtt TrialRequestsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          TRIAL_REQUESTS_TABLE: !Ref TrialRequestsTable
+          TRIAL_NOTIFICATION_TOPIC_ARN: !Ref TrialRequestsNotificationTopic
+
+  # ========================== SNS NOTIFICATIONS ================================
+  TrialRequestsNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "trial-requests-notifications",
+            !Ref CountryCode,
+          ],
+        ]
+      DisplayName: "Trial Requests Notifications"
+  # ========================== LAMBDA PERMISSIONS ================================
+  AuthLoginLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthLoginLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  AuthRegisterLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthRegisterLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  AuthSocialAuthLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthSocialAuthLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  AuthForgotPasswordLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthForgotPasswordLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+  TrialRequestsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TrialRequestsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+  # ========================== DynamoDB =====================================
+  AuthUserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        !Join ["-", [!Ref AWS::StackName, "auth-user", !Ref CountryCode]]
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [ConditionUseProd, true, false]
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: emailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+  TrialRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        !Join ["-", [!Ref AWS::StackName, "trial-requests", !Ref CountryCode]]
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [ConditionUseProd, true, false]
+      AttributeDefinitions:
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: phone
+          AttributeType: S
+      KeySchema:
+        - AttributeName: requestId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: emailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: phoneIndex
+          KeySchema:
+            - AttributeName: phone
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+Outputs:
+  # ========================== API GATEWAY OUTPUTS ================================
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentCode}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
+
+  ApiGatewayId:
+    Description: "API Gateway ID"
+    Value: !Ref ApiGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayId"
+
+  # ========================== LAMBDA OUTPUTS ================================
+  AuthLoginLambdaArn:
+    Description: "Auth Login Lambda ARN"
+    Value: !GetAtt AuthLoginLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthLoginLambdaArn"
+
+  AuthRegisterLambdaArn:
+    Description: "Auth Register Lambda ARN"
+    Value: !GetAtt AuthRegisterLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthRegisterLambdaArn"
+
+  AuthSocialAuthLambdaArn:
+    Description: "Auth Social Auth Lambda ARN"
+    Value: !GetAtt AuthSocialAuthLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthSocialAuthLambdaArn"
+
+  AuthForgotPasswordLambdaArn:
+    Description: "Auth Forgot Password Lambda ARN"
+    Value: !GetAtt AuthForgotPasswordLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthForgotPasswordLambdaArn"
+  TrialRequestsLambdaArn:
+    Description: "Trial Requests Lambda ARN"
+    Value: !GetAtt TrialRequestsLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsLambdaArn"
+  # ========================== DYNAMODB OUTPUTS ================================
+  AuthUserTableName:
+    Description: "Auth User Table Name"
+    Value: !Ref AuthUserTable
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthUserTableName"
+  TrialRequestsTableName:
+    Description: "Trial Requests Table Name"
+    Value: !Ref TrialRequestsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsTableName"
+
+  # ========================== SNS OUTPUTS ================================
+  TrialRequestsNotificationTopicArn:
+    Description: "Trial Requests Notification Topic ARN"
+    Value: !Ref TrialRequestsNotificationTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-TrialRequestsNotificationTopicArn"

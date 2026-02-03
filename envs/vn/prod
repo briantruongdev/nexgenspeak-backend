@@ -1,0 +1,11 @@
+# ---------- COMMON ------------------------
+# ==========================================
+ArtifactStore="nexgenspeak-cloudformation"
+ArtifactPath="cloudformation/prod"
+
+AwsCliProfile="canh"
+AwsRegion="ap-southeast-1"
+AwsStackName="prod-nexgenspeak-backend-services"
+AppName="nexgenspeak-backend-services"
+EnvironmentCode="prod"
+CountryCode="vn"
