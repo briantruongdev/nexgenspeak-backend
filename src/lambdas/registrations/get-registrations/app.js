@@ -29,7 +29,7 @@ exports.lambdaHandler = async (event) => {
       });
     }
 
-    const userId = decoded.userId;
+    const userId = decoded.sub; // JWT token uses 'sub' field for userId
 
     // Get all registrations for this user
     const registrations = await getRegistrationsByUserId(userId);

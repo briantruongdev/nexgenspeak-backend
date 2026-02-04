@@ -34,7 +34,7 @@ exports.lambdaHandler = async (event) => {
       });
     }
 
-    const userId = decoded.userId;
+    const userId = decoded.sub; // JWT token uses 'sub' field for userId
 
     // Parse request body
     const { teacherId, slotIds, date } = event.body
@@ -98,9 +98,31 @@ exports.lambdaHandler = async (event) => {
       const currentSlots = existingUserRegistration.slotIds || [];
       const newUniqueSlots = [...new Set([...currentSlots, ...slotIds])];
 
+      // Check if user is trying to add slots when already at max
+      if (currentSlots.length >= slotAvailablePerDay) {
+        return createCorsResponse(400, {
+          message: `Cannot register. You have already booked the maximum of ${slotAvailablePerDay} slots for this day.`,
+        });
+      }
+
+      // Check if the new slots are already booked
+      const duplicateSlots = slotIds.filter((id) => currentSlots.includes(id));
+      if (duplicateSlots.length > 0) {
+        const duplicateSlotDetails = TIME_SLOTS.filter((s) =>
+          duplicateSlots.includes(s.id),
+        )
+          .map((s) => `${s.startTime}-${s.endTime}`)
+          .join(", ");
+        return createCorsResponse(400, {
+          message: `You have already registered for the following slots: ${duplicateSlotDetails}`,
+          duplicateSlots,
+        });
+      }
+
+      // Check if adding new slots would exceed the limit
       if (newUniqueSlots.length > slotAvailablePerDay) {
         return createCorsResponse(400, {
-          message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day. Currently booked: ${currentSlots.length}`,
+          message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day. Currently booked: ${currentSlots.length}. Trying to add: ${slotIds.length}`,
         });
       }
 

@@ -5,7 +5,7 @@ const dynamodb = new AWS.DynamoDB.DocumentClient({
   region: process.env.AWS_REGION || "ap-southeast-1",
 });
 
-const TEACHERS_TABLE = "nexgenspeak-teachers-vn";
+const TEACHERS_TABLE = "dev-nexgenspeak-backend-services-vn-teachers-vn";
 
 // Sample teachers data
 const teachers = [
@@ -120,3 +120,5 @@ insertTeachers()
     console.error("Script failed:", error);
     process.exit(1);
   });
+
+//   AWS_PROFILE=canh node scripts/insert-teachers.js

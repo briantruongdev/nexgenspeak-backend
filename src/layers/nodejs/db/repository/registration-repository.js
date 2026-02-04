@@ -5,21 +5,28 @@ const tableName = process.env.REGISTRATIONS_TABLE;
 // Get registrations by userId and date
 const getRegistrationByUserAndDate = async (userId, date) => {
   const db = getDynamoClient();
-  const res = await db
-    .query({
-      TableName: tableName,
-      IndexName: "userDateIndex",
-      KeyConditionExpression: "userId = :userId AND #date = :date",
-      ExpressionAttributeNames: {
-        "#date": "date",
-      },
-      ExpressionAttributeValues: {
-        ":userId": userId,
-        ":date": date,
-      },
-      Limit: 1,
-    })
-    .promise();
+
+  const queryParams = {
+    TableName: tableName,
+    IndexName: "userDateIndex",
+    KeyConditionExpression: "userId = :userId AND #date = :date",
+    ExpressionAttributeNames: {
+      "#date": "date",
+    },
+    ExpressionAttributeValues: {
+      ":userId": userId,
+      ":date": date,
+    },
+    Limit: 1,
+  };
+
+  console.log(
+    "getRegistrationByUserAndDate - Query params:",
+    JSON.stringify(queryParams, null, 2),
+  );
+  console.log("getRegistrationByUserAndDate - userId:", userId, "date:", date);
+
+  const res = await db.query(queryParams).promise();
   return res.Items && res.Items[0];
 };
 
