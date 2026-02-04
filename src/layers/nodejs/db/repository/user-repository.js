@@ -24,6 +24,7 @@ const createUser = async ({ email, password, phone }) => {
     userId,
     email,
     phone,
+    slotAvailablePerDay: 3, // Default slots available per day
     createdAt: new Date().toISOString(),
   };
   if (password) {
