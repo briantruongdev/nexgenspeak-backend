@@ -34,17 +34,26 @@ exports.lambdaHandler = async (event) => {
     // Get all registrations for this user
     const registrations = await getRegistrationsByUserId(userId);
 
-    // Enrich registrations with teacher and slot details
-    const enrichedRegistrations = await Promise.all(
-      registrations.map(async (reg) => {
-        const teacher = await getTeacherById(reg.teacherId);
-        const slots = TIME_SLOTS.filter(
-          (slot) => reg.slotIds && reg.slotIds.includes(slot.id),
-        );
+    // Group registrations by date and expand slots with teacher info
+    const registrationsByDate = {};
 
-        return {
-          registrationId: reg.registrationId,
+    for (const reg of registrations) {
+      const teacher = await getTeacherById(reg.teacherId);
+      const slots = TIME_SLOTS.filter(
+        (slot) => reg.slotIds && reg.slotIds.includes(slot.id),
+      );
+
+      if (!registrationsByDate[reg.date]) {
+        registrationsByDate[reg.date] = {
           date: reg.date,
+          slots: [],
+        };
+      }
+
+      // Add each slot with its teacher info
+      slots.forEach((slot) => {
+        registrationsByDate[reg.date].slots.push({
+          ...slot,
           teacher: teacher
             ? {
                 teacherId: teacher.teacherId,
@@ -52,14 +61,24 @@ exports.lambdaHandler = async (event) => {
                 position: teacher.position,
               }
             : null,
-          slots,
+          registrationId: reg.registrationId,
           createdAt: reg.createdAt,
-        };
-      }),
-    );
+        });
+      });
+    }
 
-    // Sort by date (most recent first)
-    enrichedRegistrations.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Convert to array and sort
+    const enrichedRegistrations = Object.values(registrationsByDate)
+      .map((dateGroup) => {
+        // Sort slots by start time
+        dateGroup.slots.sort((a, b) => {
+          const timeA = a.startTime.split(":").map(Number);
+          const timeB = b.startTime.split(":").map(Number);
+          return timeA[0] * 60 + timeA[1] - (timeB[0] * 60 + timeB[1]);
+        });
+        return dateGroup;
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return createCorsResponse(200, {
       registrations: enrichedRegistrations,

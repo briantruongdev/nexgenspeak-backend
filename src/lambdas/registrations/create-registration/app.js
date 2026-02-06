@@ -4,6 +4,7 @@ const {
 } = require("/opt/nodejs/db/repository/teacher-repository");
 const {
   getRegistrationByUserAndDate,
+  getRegistrationByUserTeacherAndDate,
   getRegistrationsByTeacherAndDate,
   createRegistration,
   updateRegistrationSlots,
@@ -87,25 +88,54 @@ exports.lambdaHandler = async (event) => {
 
     const slotAvailablePerDay = user.slotAvailablePerDay || 3;
 
-    // Check if user already has a registration for this date
-    const existingUserRegistration = await getRegistrationByUserAndDate(
+    // Get all user's registrations for this date (across all teachers)
+    const allUserRegistrationsForDate = await getRegistrationByUserAndDate(
       userId,
       date,
     );
 
-    if (existingUserRegistration) {
-      // Check if adding new slots would exceed the limit
-      const currentSlots = existingUserRegistration.slotIds || [];
+    // Calculate total slots already booked for this date (from all teachers)
+    let totalSlotsBookedForDate = 0;
+    const allBookedSlotIds = new Set();
+
+    if (allUserRegistrationsForDate) {
+      // getRegistrationByUserAndDate returns single item, but we need to get all
+      // Let's use a different approach - scan all registrations for this user on this date
+      const db = require("/opt/nodejs/db/dynamo-client").getDynamoClient();
+      const allRegsResult = await db
+        .query({
+          TableName: process.env.REGISTRATIONS_TABLE,
+          IndexName: "userDateIndex",
+          KeyConditionExpression: "userId = :userId AND #date = :date",
+          ExpressionAttributeNames: {
+            "#date": "date",
+          },
+          ExpressionAttributeValues: {
+            ":userId": userId,
+            ":date": date,
+          },
+        })
+        .promise();
+
+      const allRegistrations = allRegsResult.Items || [];
+      allRegistrations.forEach((reg) => {
+        if (reg.slotIds && Array.isArray(reg.slotIds)) {
+          reg.slotIds.forEach((slotId) => allBookedSlotIds.add(slotId));
+        }
+      });
+      totalSlotsBookedForDate = allBookedSlotIds.size;
+    }
+
+    // Check if user already has a registration with THIS teacher for this date
+    const existingTeacherRegistration =
+      await getRegistrationByUserTeacherAndDate(userId, teacherId, date);
+
+    if (existingTeacherRegistration) {
+      // User is adding more slots with the SAME teacher
+      const currentSlots = existingTeacherRegistration.slotIds || [];
       const newUniqueSlots = [...new Set([...currentSlots, ...slotIds])];
 
-      // Check if user is trying to add slots when already at max
-      if (currentSlots.length >= slotAvailablePerDay) {
-        return createCorsResponse(400, {
-          message: `Cannot register. You have already booked the maximum of ${slotAvailablePerDay} slots for this day.`,
-        });
-      }
-
-      // Check if the new slots are already booked
+      // Check if the new slots are already booked with this teacher
       const duplicateSlots = slotIds.filter((id) => currentSlots.includes(id));
       if (duplicateSlots.length > 0) {
         const duplicateSlotDetails = TIME_SLOTS.filter((s) =>
@@ -114,37 +144,59 @@ exports.lambdaHandler = async (event) => {
           .map((s) => `${s.startTime}-${s.endTime}`)
           .join(", ");
         return createCorsResponse(400, {
-          message: `You have already registered for the following slots: ${duplicateSlotDetails}`,
+          message: `You have already registered for the following slots with this teacher: ${duplicateSlotDetails}`,
           duplicateSlots,
         });
       }
 
-      // Check if adding new slots would exceed the limit
-      if (newUniqueSlots.length > slotAvailablePerDay) {
+      // Calculate how many NEW slots are being added
+      const newSlotsCount = newUniqueSlots.length - currentSlots.length;
+      const totalSlotsAfterUpdate = totalSlotsBookedForDate + newSlotsCount;
+
+      // Check if adding new slots would exceed the daily limit
+      if (totalSlotsAfterUpdate > slotAvailablePerDay) {
         return createCorsResponse(400, {
-          message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day. Currently booked: ${currentSlots.length}. Trying to add: ${slotIds.length}`,
+          message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day. Currently booked: ${totalSlotsBookedForDate}. Trying to add: ${newSlotsCount}`,
         });
       }
 
-      // Update existing registration
+      // Update existing registration with this teacher
       await updateRegistrationSlots(
-        existingUserRegistration.registrationId,
+        existingTeacherRegistration.registrationId,
         newUniqueSlots,
       );
 
       return createCorsResponse(200, {
         message: "Registration updated successfully",
         registration: {
-          ...existingUserRegistration,
+          ...existingTeacherRegistration,
           slotIds: newUniqueSlots,
         },
       });
     }
 
-    // Check if user is trying to book more slots than allowed
-    if (slotIds.length > slotAvailablePerDay) {
+    // User is creating a NEW registration with a DIFFERENT teacher
+    // Check if any of the requested slots are already booked (with any teacher)
+    const conflictingUserSlots = slotIds.filter((id) =>
+      allBookedSlotIds.has(id),
+    );
+    if (conflictingUserSlots.length > 0) {
+      const conflictingSlotDetails = TIME_SLOTS.filter((s) =>
+        conflictingUserSlots.includes(s.id),
+      )
+        .map((s) => `${s.startTime}-${s.endTime}`)
+        .join(", ");
       return createCorsResponse(400, {
-        message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day`,
+        message: `You have already registered for the following slots: ${conflictingSlotDetails}`,
+        conflictingSlots: conflictingUserSlots,
+      });
+    }
+
+    // Check if adding these slots would exceed the daily limit
+    const totalSlotsAfterNew = totalSlotsBookedForDate + slotIds.length;
+    if (totalSlotsAfterNew > slotAvailablePerDay) {
+      return createCorsResponse(400, {
+        message: `Cannot register. You can only book ${slotAvailablePerDay} slots per day. Currently booked: ${totalSlotsBookedForDate}. Trying to add: ${slotIds.length}`,
       });
     }
 

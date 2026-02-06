@@ -30,6 +30,35 @@ const getRegistrationByUserAndDate = async (userId, date) => {
   return res.Items && res.Items[0];
 };
 
+// Get registration by userId, teacherId and date
+const getRegistrationByUserTeacherAndDate = async (userId, teacherId, date) => {
+  const db = getDynamoClient();
+
+  const queryParams = {
+    TableName: tableName,
+    IndexName: "userDateIndex",
+    KeyConditionExpression: "userId = :userId AND #date = :date",
+    FilterExpression: "teacherId = :teacherId",
+    ExpressionAttributeNames: {
+      "#date": "date",
+    },
+    ExpressionAttributeValues: {
+      ":userId": userId,
+      ":date": date,
+      ":teacherId": teacherId,
+    },
+    Limit: 1,
+  };
+
+  console.log(
+    "getRegistrationByUserTeacherAndDate - Query params:",
+    JSON.stringify(queryParams, null, 2),
+  );
+
+  const res = await db.query(queryParams).promise();
+  return res.Items && res.Items[0];
+};
+
 // Get registrations by teacherId and date
 const getRegistrationsByTeacherAndDate = async (teacherId, date) => {
   const db = getDynamoClient();
@@ -107,6 +136,7 @@ const updateRegistrationSlots = async (registrationId, slotIds) => {
 
 module.exports = {
   getRegistrationByUserAndDate,
+  getRegistrationByUserTeacherAndDate,
   getRegistrationsByTeacherAndDate,
   getRegistrationsByUserId,
   createRegistration,
