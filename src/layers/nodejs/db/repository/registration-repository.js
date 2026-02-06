@@ -134,11 +134,36 @@ const updateRegistrationSlots = async (registrationId, slotIds) => {
     .promise();
 };
 
+// Get registration by registrationId
+const getRegistrationById = async (registrationId) => {
+  const db = getDynamoClient();
+  const res = await db
+    .get({
+      TableName: tableName,
+      Key: { registrationId },
+    })
+    .promise();
+  return res.Item;
+};
+
+// Delete registration
+const deleteRegistration = async (registrationId) => {
+  const db = getDynamoClient();
+  await db
+    .delete({
+      TableName: tableName,
+      Key: { registrationId },
+    })
+    .promise();
+};
+
 module.exports = {
   getRegistrationByUserAndDate,
   getRegistrationByUserTeacherAndDate,
   getRegistrationsByTeacherAndDate,
   getRegistrationsByUserId,
+  getRegistrationById,
   createRegistration,
   updateRegistrationSlots,
+  deleteRegistration,
 };

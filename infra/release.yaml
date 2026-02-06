@@ -148,6 +148,12 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateRegistrationLambda.Arn}/invocations"
+          /registrations/cancel-slot:
+            delete:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CancelSlotLambda.Arn}/invocations"
 
   # ========================== POLICIES ================================
   FunctionsLogPolicy:
@@ -173,6 +179,7 @@ Resources:
         - !Ref GetAvailableSlotsRole
         - !Ref CreateRegistrationRole
         - !Ref GetRegistrationsRole
+        - !Ref CancelSlotRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -672,6 +679,58 @@ Resources:
       Roles:
         - !Ref GetRegistrationsRole
 
+  CancelSlotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cancel-slot",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Cancel Slot Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CancelSlotPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cancel-slot",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: !GetAtt RegistrationsTable.Arn
+      Roles:
+        - !Ref CancelSlotRole
+
   # ========================== Lambda Layers ================================
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
@@ -936,6 +995,29 @@ Resources:
           TEACHERS_TABLE: !Ref TeachersTable
           REGISTRATIONS_TABLE: !Ref RegistrationsTable
 
+  CancelSlotLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [!Ref EnvironmentCode, !Ref AppName, "cancel-slot", !Ref CountryCode],
+        ]
+      CodeUri: ../src/lambdas/registrations/cancel-slot
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CancelSlotRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
   # ========================== SNS NOTIFICATIONS ================================
   TrialRequestsNotificationTopic:
     Type: AWS::SNS::Topic
@@ -1019,6 +1101,14 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetRegistrationsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CancelSlotLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CancelSlotLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
