@@ -125,6 +125,35 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TrialRequestsLambda.Arn}/invocations"
+          /teachers:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTeachersLambda.Arn}/invocations"
+          /teachers/{teacherId}/available-slots:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAvailableSlotsLambda.Arn}/invocations"
+          /registrations:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRegistrationsLambda.Arn}/invocations"
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateRegistrationLambda.Arn}/invocations"
+          /registrations/cancel-slot:
+            delete:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CancelSlotLambda.Arn}/invocations"
 
   # ========================== POLICIES ================================
   FunctionsLogPolicy:
@@ -146,6 +175,11 @@ Resources:
         - !Ref AuthRegisterRole
         - !Ref AuthSocialAuthRole
         - !Ref AuthForgotPasswordRole
+        - !Ref GetTeachersRole
+        - !Ref GetAvailableSlotsRole
+        - !Ref CreateRegistrationRole
+        - !Ref GetRegistrationsRole
+        - !Ref CancelSlotRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -418,6 +452,285 @@ Resources:
       MaxSessionDuration: 3600
       Path: /
 
+  # ========================== TEACHERS & REGISTRATIONS ROLES ================================
+  GetTeachersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teachers",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Get Teachers Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  GetTeachersPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teachers",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Scan
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref GetTeachersRole
+
+  GetAvailableSlotsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-available-slots",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Get Available Slots Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  GetAvailableSlotsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-available-slots",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/teacherDateIndex"
+      Roles:
+        - !Ref GetAvailableSlotsRole
+
+  CreateRegistrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "create-registration",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Create Registration Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CreateRegistrationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "create-registration",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/userDateIndex"
+              - !Sub "${RegistrationsTable.Arn}/index/teacherDateIndex"
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt RegistrationsTable.Arn
+      Roles:
+        - !Ref CreateRegistrationRole
+
+  GetRegistrationsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-registrations",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Get Registrations Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  GetRegistrationsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-registrations",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/userDateIndex"
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref GetRegistrationsRole
+
+  CancelSlotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cancel-slot",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Cancel Slot Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CancelSlotPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cancel-slot",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+            Resource: !GetAtt RegistrationsTable.Arn
+      Roles:
+        - !Ref CancelSlotRole
+
   # ========================== Lambda Layers ================================
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
@@ -567,6 +880,144 @@ Resources:
           TRIAL_REQUESTS_TABLE: !Ref TrialRequestsTable
           TRIAL_NOTIFICATION_TOPIC_ARN: !Ref TrialRequestsNotificationTopic
 
+  # ========================== TEACHERS & REGISTRATIONS LAMBDAS ================================
+  GetTeachersLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teachers",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/teachers/get-teachers
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt GetTeachersRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          TEACHERS_TABLE: !Ref TeachersTable
+
+  GetAvailableSlotsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-available-slots",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/teachers/get-available-slots
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt GetAvailableSlotsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          TEACHERS_TABLE: !Ref TeachersTable
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CreateRegistrationLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "create-registration",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/registrations/create-registration
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CreateRegistrationRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          TEACHERS_TABLE: !Ref TeachersTable
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+          USERS_TABLE: !Ref AuthUserTable
+
+  GetRegistrationsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-registrations",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/registrations/get-registrations
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt GetRegistrationsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          TEACHERS_TABLE: !Ref TeachersTable
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CancelSlotLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [!Ref EnvironmentCode, !Ref AppName, "cancel-slot", !Ref CountryCode],
+        ]
+      CodeUri: ../src/lambdas/registrations/cancel-slot
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CancelSlotRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
   # ========================== SNS NOTIFICATIONS ================================
   TrialRequestsNotificationTopic:
     Type: AWS::SNS::Topic
@@ -621,6 +1072,47 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  GetTeachersLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetTeachersLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  GetAvailableSlotsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetAvailableSlotsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CreateRegistrationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateRegistrationLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  GetRegistrationsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetRegistrationsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CancelSlotLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CancelSlotLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
   # ========================== DynamoDB =====================================
   AuthUserTable:
     Type: AWS::DynamoDB::Table
@@ -679,6 +1171,58 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+  TeachersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        !Join ["-", [!Ref AWS::StackName, "teachers", !Ref CountryCode]]
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [ConditionUseProd, true, false]
+      AttributeDefinitions:
+        - AttributeName: teacherId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: teacherId
+          KeyType: HASH
+
+  RegistrationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        !Join ["-", [!Ref AWS::StackName, "registrations", !Ref CountryCode]]
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [ConditionUseProd, true, false]
+      AttributeDefinitions:
+        - AttributeName: registrationId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: teacherId
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: registrationId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: userDateIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: teacherDateIndex
+          KeySchema:
+            - AttributeName: teacherId
+              KeyType: HASH
+            - AttributeName: date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
 Outputs:
   # ========================== API GATEWAY OUTPUTS ================================
   ApiGatewayUrl:
