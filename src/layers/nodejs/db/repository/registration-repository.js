@@ -96,7 +96,13 @@ const getRegistrationsByUserId = async (userId) => {
 };
 
 // Create a new registration
-const createRegistration = async ({ userId, teacherId, slotIds, date }) => {
+const createRegistration = async ({
+  userId,
+  teacherId,
+  slotIds,
+  date,
+  email,
+}) => {
   const db = getDynamoClient();
   const registrationId = uuidv4();
   const item = {
@@ -105,6 +111,7 @@ const createRegistration = async ({ userId, teacherId, slotIds, date }) => {
     teacherId,
     slotIds,
     date,
+    email,
     createdAt: new Date().toISOString(),
   };
 

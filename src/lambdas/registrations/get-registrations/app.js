@@ -63,6 +63,7 @@ exports.lambdaHandler = async (event) => {
             : null,
           registrationId: reg.registrationId,
           createdAt: reg.createdAt,
+          email: reg.email,
         });
       });
     }

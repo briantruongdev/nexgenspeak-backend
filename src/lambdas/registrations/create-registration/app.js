@@ -232,6 +232,7 @@ exports.lambdaHandler = async (event) => {
       teacherId,
       slotIds,
       date,
+      email: decoded.email,
     });
 
     return createCorsResponse(201, {
