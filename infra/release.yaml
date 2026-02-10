@@ -137,6 +137,18 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAvailableSlotsLambda.Arn}/invocations"
+          /teachers/favorite:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ToggleFavoriteLambda.Arn}/invocations"
+          /teachers/favorites:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetFavoritesLambda.Arn}/invocations"
           /registrations:
             get:
               x-amazon-apigateway-integration:
@@ -180,6 +192,8 @@ Resources:
         - !Ref CreateRegistrationRole
         - !Ref GetRegistrationsRole
         - !Ref CancelSlotRole
+        - !Ref ToggleFavoriteRole
+        - !Ref GetFavoritesRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -500,6 +514,10 @@ Resources:
             Action:
               - dynamodb:Scan
             Resource: !GetAtt TeachersTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt AuthUserTable.Arn
       Roles:
         - !Ref GetTeachersRole
 
@@ -731,6 +749,115 @@ Resources:
       Roles:
         - !Ref CancelSlotRole
 
+  ToggleFavoriteRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "toggle-favorite",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Toggle Favorite Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  ToggleFavoritePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "toggle-favorite",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:UpdateItem
+              - dynamodb:GetItem
+            Resource: !GetAtt AuthUserTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref ToggleFavoriteRole
+
+  GetFavoritesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-favorites",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Get Favorites Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  GetFavoritesPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-favorites",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt AuthUserTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref GetFavoritesRole
+
   # ========================== Lambda Layers ================================
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
@@ -906,6 +1033,8 @@ Resources:
       Environment:
         Variables:
           AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
           TEACHERS_TABLE: !Ref TeachersTable
 
   GetAvailableSlotsLambda:
@@ -1018,6 +1147,64 @@ Resources:
           JWT_SECRET: !Ref JwtSecret
           REGISTRATIONS_TABLE: !Ref RegistrationsTable
 
+  ToggleFavoriteLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "toggle-favorite",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/teachers/toggle-favorite
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt ToggleFavoriteRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+          TEACHERS_TABLE: !Ref TeachersTable
+
+  GetFavoritesLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-favorites",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/teachers/get-favorites
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt GetFavoritesRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+          TEACHERS_TABLE: !Ref TeachersTable
+
   # ========================== SNS NOTIFICATIONS ================================
   TrialRequestsNotificationTopic:
     Type: AWS::SNS::Topic
@@ -1109,6 +1296,22 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref CancelSlotLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  ToggleFavoriteLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ToggleFavoriteLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  GetFavoritesLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetFavoritesLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"

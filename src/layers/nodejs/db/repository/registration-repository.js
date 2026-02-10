@@ -101,6 +101,7 @@ const createRegistration = async ({
   teacherId,
   slotIds,
   date,
+  phone,
   email,
 }) => {
   const db = getDynamoClient();
@@ -111,6 +112,7 @@ const createRegistration = async ({
     teacherId,
     slotIds,
     date,
+    phone,
     email,
     createdAt: new Date().toISOString(),
   };

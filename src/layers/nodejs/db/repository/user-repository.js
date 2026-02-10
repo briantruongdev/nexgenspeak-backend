@@ -67,8 +67,55 @@ const resetPassword = async (email, newPassword) => {
   return { userId: user.userId, email: user.email };
 };
 
+const addFavoriteTeacher = async (userId, teacherId) => {
+  const db = getDynamoClient();
+  const teacherSet = db.createSet([teacherId]);
+
+  await db
+    .update({
+      TableName: tableName,
+      Key: { userId },
+      UpdateExpression: "ADD favoriteTeachers :teacherId",
+      ExpressionAttributeValues: {
+        ":teacherId": teacherSet,
+      },
+    })
+    .promise();
+};
+
+const removeFavoriteTeacher = async (userId, teacherId) => {
+  const db = getDynamoClient();
+  const teacherSet = db.createSet([teacherId]);
+
+  await db
+    .update({
+      TableName: tableName,
+      Key: { userId },
+      UpdateExpression: "DELETE favoriteTeachers :teacherId",
+      ExpressionAttributeValues: {
+        ":teacherId": teacherSet,
+      },
+    })
+    .promise();
+};
+
+const getFavoriteTeachers = async (userId) => {
+  const db = getDynamoClient();
+  const res = await db
+    .get({
+      TableName: tableName,
+      Key: { userId },
+      ProjectionExpression: "favoriteTeachers",
+    })
+    .promise();
+  return res.Item?.favoriteTeachers?.values || [];
+};
+
 module.exports = {
   getUserByEmail,
   createUser,
   resetPassword,
+  addFavoriteTeacher,
+  removeFavoriteTeacher,
+  getFavoriteTeachers,
 };
