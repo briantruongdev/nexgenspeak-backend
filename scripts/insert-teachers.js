@@ -35,20 +35,20 @@ const teachers = [
 
     resume: [
       {
-        time: "2015-2018",
+        time: "2015 - 2018",
         value: "English Lecturer at Ho Chi Minh Language University",
       },
       {
-        time: "2018-2020",
+        time: "2018 - 2020",
         value: "Senior IELTS Instructor at British Language Center",
       },
       {
-        time: "2020-2022",
+        time: "2020 - 2022",
         value: "Online English Teacher for global learners",
       },
-      { time: "2022-Now", value: "Senior Teacher at NexGen English Center" },
+      { time: "2022 - 2023", value: "Senior Teacher at NexGen English Center" },
       {
-        time: "2023",
+        time: "2023 - Now",
         value: "Hosted IELTS speaking workshops for university students",
       },
     ],
@@ -111,15 +111,15 @@ const teachers = [
       "My teaching style is friendly and interactive. I encourage students to speak a lot during lessons. We practice through discussions and role-play. Lessons are customized for each learner. I focus on real-world communication skills.",
 
     resume: [
-      { time: "2014-2017", value: "BA English Linguistics - HCM University" },
+      { time: "2014 - 2017", value: "BA English Linguistics - HCM University" },
       {
-        time: "2017-2019",
+        time: "2017 - 2019",
         value: "English Trainer at Global Communication Center",
       },
-      { time: "2019-2021", value: "Corporate English Trainer for companies" },
-      { time: "2021-Now", value: "Online English Communication Coach" },
+      { time: "2019 - 2021", value: "Corporate English Trainer for companies" },
+      { time: "2021 - 2024", value: "Online English Communication Coach" },
       {
-        time: "2023",
+        time: "2024 - Now",
         value: "Hosted English speaking workshops for professionals",
       },
     ],
@@ -183,13 +183,13 @@ const teachers = [
 
     resume: [
       {
-        time: "2013-2017",
+        time: "2013 - 2017",
         value: "BA English Teaching - University of Education",
       },
-      { time: "2017-2019", value: "IELTS Instructor at ACET Vietnam" },
-      { time: "2019-2022", value: "Senior IELTS Trainer" },
-      { time: "2022-Now", value: "IELTS Course Designer & Teacher" },
-      { time: "2024", value: "Published IELTS training materials" },
+      { time: "2017 - 2019", value: "IELTS Instructor at ACET Vietnam" },
+      { time: "2019 - 2022", value: "Senior IELTS Trainer" },
+      { time: "2022 - 2024", value: "IELTS Course Designer & Teacher" },
+      { time: "2024 - Now", value: "Published IELTS training materials" },
     ],
 
     specialties: [
@@ -247,14 +247,20 @@ const teachers = [
       "My teaching style is professional and practical. Lessons are based on real business scenarios. I focus on communication clarity and confidence. Students practice through role-play and discussions. Each lesson is tailored to career goals.",
 
     resume: [
-      { time: "2012-2016", value: "MBA in International Business - UK" },
-      { time: "2016-2018", value: "Business English Trainer at Language Link" },
+      { time: "2012 - 2016", value: "MBA in International Business - UK" },
       {
-        time: "2018-2021",
+        time: "2016 - 2018",
+        value: "Business English Trainer at Language Link",
+      },
+      {
+        time: "2018 - 2021",
         value: "Corporate Trainer for multinational companies",
       },
-      { time: "2021-Now", value: "Freelance Business English Coach" },
-      { time: "2023", value: "Conducted corporate communication workshops" },
+      { time: "2021 - 2024", value: "Freelance Business English Coach" },
+      {
+        time: "2024 - Now",
+        value: "Conducted corporate communication workshops",
+      },
     ],
 
     specialties: [
@@ -312,16 +318,16 @@ const teachers = [
 
     resume: [
       {
-        time: "2013-2016",
+        time: "2013 - 2016",
         value: "BA English Phonetics - University of Education",
       },
       {
-        time: "2016-2019",
+        time: "2016 - 2019",
         value: "Pronunciation Trainer at International Language Center",
       },
-      { time: "2019-2022", value: "Accent Coach for professionals" },
-      { time: "2022-Now", value: "Online Pronunciation Specialist" },
-      { time: "2023", value: "Speech and phonetics workshop trainer" },
+      { time: "2019 - 2022", value: "Accent Coach for professionals" },
+      { time: "2022 - 2024", value: "Online Pronunciation Specialist" },
+      { time: "2024 - Now", value: "Speech and phonetics workshop trainer" },
     ],
 
     specialties: [
@@ -378,14 +384,14 @@ const teachers = [
       "My teaching style is energetic and fun. I use games and visuals to keep kids engaged. Lessons include songs and storytelling. I encourage kids to speak confidently. Learning is always enjoyable and interactive.",
 
     resume: [
-      { time: "2010-2014", value: "BA Early Childhood Education" },
-      { time: "2014-2017", value: "Kids English Teacher at VUS" },
-      { time: "2017-2020", value: "Cambridge YLE Instructor" },
+      { time: "2010 - 2014", value: "BA Early Childhood Education" },
+      { time: "2014 - 2017", value: "Kids English Teacher at VUS" },
+      { time: "2017 - 2020", value: "Cambridge YLE Instructor" },
       {
-        time: "2020-Now",
+        time: "2020 - 2024",
         value: "Senior Kids Teacher at International School",
       },
-      { time: "2023", value: "Designed English curriculum for kids" },
+      { time: "2024 - Now", value: "Designed English curriculum for kids" },
     ],
 
     specialties: [
@@ -441,11 +447,11 @@ const teachers = [
       "My lessons are structured and intensive. I focus on exam strategies and practice. Students receive detailed corrections. I create personalized study plans. Each lesson improves your score step by step.",
 
     resume: [
-      { time: "2012-2016", value: "BA English - University of Education" },
-      { time: "2016-2018", value: "TOEFL Instructor at ILA" },
-      { time: "2018-2021", value: "Academic English Lecturer" },
-      { time: "2021-Now", value: "TOEFL Specialist" },
-      { time: "2023", value: "Study abroad consultant & trainer" },
+      { time: "2012 - 2016", value: "BA English - University of Education" },
+      { time: "2016 - 2018", value: "TOEFL Instructor at ILA" },
+      { time: "2018 - 2021", value: "Academic English Lecturer" },
+      { time: "2021 - 2022", value: "TOEFL Specialist" },
+      { time: "2022 - Now", value: "Study abroad consultant & trainer" },
     ],
 
     specialties: [
@@ -501,11 +507,11 @@ const teachers = [
       "My lessons are relaxed and conversation-focused. We talk about daily life and interests. I correct mistakes gently. Students speak most of the time. Learning feels natural and enjoyable.",
 
     resume: [
-      { time: "2013-2016", value: "BA English Translation" },
-      { time: "2016-2019", value: "English Teacher in USA" },
-      { time: "2019-2021", value: "Online Conversation Coach" },
-      { time: "2021-Now", value: "Senior Speaking Teacher" },
-      { time: "2023", value: "Hosted English speaking clubs" },
+      { time: "2013 - 2016", value: "BA English Translation" },
+      { time: "2016 - 2019", value: "English Teacher in USA" },
+      { time: "2019 - 2021", value: "Online Conversation Coach" },
+      { time: "2021 - 2023", value: "Senior Speaking Teacher" },
+      { time: "2023 - Now", value: "Hosted English speaking clubs" },
     ],
 
     specialties: [
