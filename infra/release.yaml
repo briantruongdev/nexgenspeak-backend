@@ -131,6 +131,12 @@ Resources:
                 type: aws_proxy
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTeachersLambda.Arn}/invocations"
+          /teachers/{teacherId}:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTeacherByIdLambda.Arn}/invocations"
           /teachers/{teacherId}/available-slots:
             get:
               x-amazon-apigateway-integration:
@@ -188,6 +194,7 @@ Resources:
         - !Ref AuthSocialAuthRole
         - !Ref AuthForgotPasswordRole
         - !Ref GetTeachersRole
+        - !Ref GetTeacherByIdRole
         - !Ref GetAvailableSlotsRole
         - !Ref CreateRegistrationRole
         - !Ref GetRegistrationsRole
@@ -520,6 +527,56 @@ Resources:
             Resource: !GetAtt AuthUserTable.Arn
       Roles:
         - !Ref GetTeachersRole
+
+  GetTeacherByIdRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teacher-by-id",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for Get Teacher By ID Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  GetTeacherByIdPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teacher-by-id",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref GetTeacherByIdRole
 
   GetAvailableSlotsRole:
     Type: AWS::IAM::Role
@@ -1037,6 +1094,33 @@ Resources:
           USERS_TABLE: !Ref AuthUserTable
           TEACHERS_TABLE: !Ref TeachersTable
 
+  GetTeacherByIdLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "get-teacher-by-id",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/teachers/get-teacher-by-id
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt GetTeacherByIdRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          TEACHERS_TABLE: !Ref TeachersTable
+
   GetAvailableSlotsLambda:
     Type: AWS::Serverless::Function
     Properties:
@@ -1264,6 +1348,14 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetTeachersLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  GetTeacherByIdLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetTeacherByIdLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
