@@ -173,6 +173,68 @@ Resources:
                 httpMethod: POST
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CancelSlotLambda.Arn}/invocations"
 
+          # ========================== CMS API PATHS ================================
+          /cms/login:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsLoginLambda.Arn}/invocations"
+          /cms/admin/teacher-accounts:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsCreateTeacherAccountLambda.Arn}/invocations"
+          /cms/admin/teachers:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsGetAllTeachersLambda.Arn}/invocations"
+          /cms/admin/teachers/{teacherId}/schedule:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsGetTeacherScheduleLambda.Arn}/invocations"
+          /cms/admin/students:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsGetAllStudentsLambda.Arn}/invocations"
+          /cms/admin/students/{studentId}/schedule:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsGetStudentScheduleLambda.Arn}/invocations"
+          /cms/admin/students/{studentId}/settings:
+            put:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsUpdateStudentSettingsLambda.Arn}/invocations"
+          /cms/teacher/schedule:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsTeacherGetScheduleLambda.Arn}/invocations"
+          /cms/teacher/summary:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsTeacherGetSummaryLambda.Arn}/invocations"
+          /cms/seed-admin:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CmsSeedAdminLambda.Arn}/invocations"
+
   # ========================== POLICIES ================================
   FunctionsLogPolicy:
     Type: AWS::IAM::Policy
@@ -201,6 +263,16 @@ Resources:
         - !Ref CancelSlotRole
         - !Ref ToggleFavoriteRole
         - !Ref GetFavoritesRole
+        - !Ref CmsLoginRole
+        - !Ref CmsCreateTeacherAccountRole
+        - !Ref CmsGetAllTeachersRole
+        - !Ref CmsGetTeacherScheduleRole
+        - !Ref CmsGetAllStudentsRole
+        - !Ref CmsGetStudentScheduleRole
+        - !Ref CmsUpdateStudentSettingsRole
+        - !Ref CmsTeacherGetScheduleRole
+        - !Ref CmsTeacherGetSummaryRole
+        - !Ref CmsSeedAdminRole
 
   AuthLoginPolicy:
     Type: AWS::IAM::Policy
@@ -915,6 +987,530 @@ Resources:
       Roles:
         - !Ref GetFavoritesRole
 
+  # ========================== CMS ROLES ================================
+  CmsLoginRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-login",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Login Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsLoginPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-login",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref CmsLoginRole
+
+  CmsCreateTeacherAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-create-teacher",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Create Teacher Account Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsCreateTeacherAccountPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-create-teacher",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource: !GetAtt TeachersTable.Arn
+      Roles:
+        - !Ref CmsCreateTeacherAccountRole
+
+  CmsGetAllTeachersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-teachers",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Get All Teachers Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsGetAllTeachersPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-teachers",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Scan
+            Resource:
+              - !GetAtt TeachersTable.Arn
+              - !GetAtt AuthUserTable.Arn
+      Roles:
+        - !Ref CmsGetAllTeachersRole
+
+  CmsGetTeacherScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-teacher-sched",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Get Teacher Schedule Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsGetTeacherSchedulePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-teacher-sched",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: !GetAtt TeachersTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/teacherDateIndex"
+      Roles:
+        - !Ref CmsGetTeacherScheduleRole
+
+  CmsGetAllStudentsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-students",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Get All Students Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsGetAllStudentsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-students",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Scan
+            Resource: !GetAtt AuthUserTable.Arn
+      Roles:
+        - !Ref CmsGetAllStudentsRole
+
+  CmsGetStudentScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-student-sched",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Get Student Schedule Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsGetStudentSchedulePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-student-sched",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !GetAtt TeachersTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/userDateIndex"
+      Roles:
+        - !Ref CmsGetStudentScheduleRole
+
+  CmsUpdateStudentSettingsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-upd-student",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Update Student Settings Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsUpdateStudentSettingsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-upd-student",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource: !GetAtt AuthUserTable.Arn
+      Roles:
+        - !Ref CmsUpdateStudentSettingsRole
+
+  CmsTeacherGetScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-schedule",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Teacher Get Schedule Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsTeacherGetSchedulePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-schedule",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/teacherDateIndex"
+      Roles:
+        - !Ref CmsTeacherGetScheduleRole
+
+  CmsTeacherGetSummaryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-summary",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Teacher Get Summary Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsTeacherGetSummaryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-summary",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !GetAtt RegistrationsTable.Arn
+              - !Sub "${RegistrationsTable.Arn}/index/teacherDateIndex"
+      Roles:
+        - !Ref CmsTeacherGetSummaryRole
+
+  CmsSeedAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-seed-admin",
+            !Ref CountryCode,
+            "role",
+          ],
+        ]
+      Description: Role for CMS Seed Admin Lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Path: /
+
+  CmsSeedAdminPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-seed-admin",
+            !Ref CountryCode,
+            "policy",
+          ],
+        ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt AuthUserTable.Arn
+              - !Sub "${AuthUserTable.Arn}/index/emailIndex"
+      Roles:
+        - !Ref CmsSeedAdminRole
+
   # ========================== Lambda Layers ================================
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
@@ -1289,6 +1885,286 @@ Resources:
           USERS_TABLE: !Ref AuthUserTable
           TEACHERS_TABLE: !Ref TeachersTable
 
+  # ========================== CMS LAMBDAS ================================
+  CmsLoginLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [!Ref EnvironmentCode, !Ref AppName, "cms-login", !Ref CountryCode],
+        ]
+      CodeUri: ../src/lambdas/cms/auth/login
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsLoginRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  CmsCreateTeacherAccountLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-create-teacher",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/create-teacher-account
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsCreateTeacherAccountRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+          TEACHERS_TABLE: !Ref TeachersTable
+
+  CmsGetAllTeachersLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-teachers",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/get-all-teachers
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsGetAllTeachersRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+          TEACHERS_TABLE: !Ref TeachersTable
+
+  CmsGetTeacherScheduleLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-teacher-sched",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/get-teacher-schedule
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsGetTeacherScheduleRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          TEACHERS_TABLE: !Ref TeachersTable
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CmsGetAllStudentsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-get-students",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/get-all-students
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsGetAllStudentsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  CmsGetStudentScheduleLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-student-sched",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/get-student-schedule
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsGetStudentScheduleRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+          TEACHERS_TABLE: !Ref TeachersTable
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CmsUpdateStudentSettingsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-upd-student",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/admin/update-student-settings
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsUpdateStudentSettingsRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          USERS_TABLE: !Ref AuthUserTable
+
+  CmsTeacherGetScheduleLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-schedule",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/teacher/get-my-schedule
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsTeacherGetScheduleRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CmsTeacherGetSummaryLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-my-summary",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/teacher/get-my-summary
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsTeacherGetSummaryRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          JWT_SECRET: !Ref JwtSecret
+          REGISTRATIONS_TABLE: !Ref RegistrationsTable
+
+  CmsSeedAdminLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        !Join [
+          "-",
+          [
+            !Ref EnvironmentCode,
+            !Ref AppName,
+            "cms-seed-admin",
+            !Ref CountryCode,
+          ],
+        ]
+      CodeUri: ../src/lambdas/cms/auth/seed-admin
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 600
+      Tracing: Active
+      Role: !GetAtt CmsSeedAdminRole.Arn
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          AWS: True
+          USERS_TABLE: !Ref AuthUserTable
+
   # ========================== SNS NOTIFICATIONS ================================
   TrialRequestsNotificationTopic:
     Type: AWS::SNS::Topic
@@ -1404,6 +2280,87 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref GetFavoritesLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  # ========================== CMS LAMBDA PERMISSIONS ================================
+  CmsLoginLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsLoginLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsCreateTeacherAccountLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsCreateTeacherAccountLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsGetAllTeachersLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsGetAllTeachersLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsGetTeacherScheduleLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsGetTeacherScheduleLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsGetAllStudentsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsGetAllStudentsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsGetStudentScheduleLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsGetStudentScheduleLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsUpdateStudentSettingsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsUpdateStudentSettingsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsTeacherGetScheduleLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsTeacherGetScheduleLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsTeacherGetSummaryLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsTeacherGetSummaryLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+
+  CmsSeedAdminLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CmsSeedAdminLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
