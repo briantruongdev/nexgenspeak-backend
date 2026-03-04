@@ -26,7 +26,45 @@ exports.lambdaHandler = async (event) => {
     }
 
     // Get all registrations for this teacher
-    const registrations = await getRegistrationsByTeacherId(teacherId);
+    let registrations = await getRegistrationsByTeacherId(teacherId);
+
+    // ===== Date Filtering =====
+    // Supports: ?filter=this-month | ?filter=last-month
+    //           ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+    const filter = event.queryStringParameters?.filter;
+    let startDate = event.queryStringParameters?.startDate;
+    let endDate = event.queryStringParameters?.endDate;
+    let filterLabel = "all";
+
+    if (filter === "this-month") {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      startDate = `${year}-${month}-01`;
+      // Last day of current month
+      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+      endDate = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
+      filterLabel = `this-month (${startDate} ~ ${endDate})`;
+    } else if (filter === "last-month") {
+      const now = new Date();
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const year = lastMonth.getFullYear();
+      const month = String(lastMonth.getMonth() + 1).padStart(2, "0");
+      startDate = `${year}-${month}-01`;
+      const lastDay = new Date(year, lastMonth.getMonth() + 1, 0).getDate();
+      endDate = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
+      filterLabel = `last-month (${startDate} ~ ${endDate})`;
+    } else if (startDate || endDate) {
+      filterLabel = `custom (${startDate || "..."} ~ ${endDate || "..."})`;
+    }
+
+    // Apply date filters
+    if (startDate) {
+      registrations = registrations.filter((r) => r.date >= startDate);
+    }
+    if (endDate) {
+      registrations = registrations.filter((r) => r.date <= endDate);
+    }
 
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
@@ -93,6 +131,7 @@ exports.lambdaHandler = async (event) => {
         fullName: teacher.fullName,
         position: teacher.position,
       },
+      filter: filterLabel,
       schedule: {
         completed: completedSlots,
         upcoming: upcomingSlots,
@@ -112,3 +151,11 @@ exports.lambdaHandler = async (event) => {
     return createCorsResponse(500, { message: "Internal server error" });
   }
 };
+// # Xem toàn bộ (mặc định)
+// GET /cms/admin/teachers/{teacherId}/schedule
+// # Chỉ xem tháng này (03/2026)
+// GET /cms/admin/teachers/{teacherId}/schedule?filter=this-month
+// # Chỉ xem tháng trước (02/2026)
+// GET /cms/admin/teachers/{teacherId}/schedule?filter=last-month
+// # Custom date range
+// GET /cms/admin/teachers/{teacherId}/schedule?startDate=2026-01-01&endDate=2026-01-31

@@ -85,27 +85,51 @@ exports.lambdaHandler = async (event) => {
       });
     });
 
-    // Calculate available slots for today
-    const todayBookedSlots = bookedSlotsByDate[today] || [];
-    TIME_SLOTS.forEach((slot) => {
-      if (!todayBookedSlots.includes(slot.id)) {
-        // Only show future available slots for today
-        const now = new Date();
-        const [hours, minutes] = slot.startTime.split(":").map(Number);
-        const slotStartTime = new Date();
-        slotStartTime.setHours(hours, minutes, 0, 0);
+    // Calculate available slots for the date range (today and future only)
+    const rangeStart = startDate && startDate > today ? startDate : today;
+    const rangeEnd = endDate || today;
 
-        if (now < slotStartTime) {
-          availableSlots.push({
-            date: today,
-            slotId: slot.id,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            status: "available",
-          });
+    // Generate all dates from rangeStart to rangeEnd
+    const currentDate = new Date(rangeStart + "T00:00:00");
+    const lastDate = new Date(rangeEnd + "T00:00:00");
+
+    while (currentDate <= lastDate) {
+      const dateStr = currentDate.toISOString().split("T")[0];
+      const bookedForDate = bookedSlotsByDate[dateStr] || [];
+
+      TIME_SLOTS.forEach((slot) => {
+        if (!bookedForDate.includes(slot.id)) {
+          if (dateStr === today) {
+            // For today: only show future slots
+            const now = new Date();
+            const [hours, minutes] = slot.startTime.split(":").map(Number);
+            const slotStartTime = new Date();
+            slotStartTime.setHours(hours, minutes, 0, 0);
+
+            if (now < slotStartTime) {
+              availableSlots.push({
+                date: dateStr,
+                slotId: slot.id,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
+                status: "available",
+              });
+            }
+          } else {
+            // For future dates: show all unbooked slots
+            availableSlots.push({
+              date: dateStr,
+              slotId: slot.id,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              status: "available",
+            });
+          }
         }
-      }
-    });
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
     // Sort
     const sortByDateTime = (a, b) => {

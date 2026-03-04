@@ -211,7 +211,7 @@ async function insertTeacherAccounts() {
   for (const teacher of teacherAccounts) {
     const username = fullNameToUsername(teacher.fullName);
     const email = `${username}@gmail.com`;
-    const rawPassword = `${username}@12345`;
+    const rawPassword = `${username.charAt(0).toUpperCase() + username.slice(1)}@12345`;
 
     // Hash password with bcryptjs (salt rounds = 10, same as the rest of the app)
     const salt = await bcrypt.genSalt(10);
@@ -247,7 +247,9 @@ async function insertTeacherAccounts() {
   console.log(`\n✓ Inserted ${teacherAccounts.length} teacher accounts.`);
   console.log("\nAll teachers can now log in via CMS with:");
   console.log("  - Email:    <fullname_no_diacritics>@gmail.com");
-  console.log("  - Password: <fullname_no_diacritics>@12345");
+  console.log(
+    "  - Password: <Fullname_no_diacritics>@12345 (first letter capitalized)",
+  );
   console.log("  - Role returned: teacher");
 }
 
