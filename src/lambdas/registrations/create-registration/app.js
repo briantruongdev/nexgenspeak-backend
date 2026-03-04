@@ -226,12 +226,12 @@ exports.lambdaHandler = async (event) => {
       });
     }
 
-    // Create new registration
     const registration = await createRegistration({
       userId,
       teacherId,
       slotIds,
       date,
+      phone: user.phone,
       email: decoded.email,
     });
 

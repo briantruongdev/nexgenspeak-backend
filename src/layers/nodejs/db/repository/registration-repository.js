@@ -101,6 +101,7 @@ const createRegistration = async ({
   teacherId,
   slotIds,
   date,
+  phone,
   email,
 }) => {
   const db = getDynamoClient();
@@ -111,6 +112,7 @@ const createRegistration = async ({
     teacherId,
     slotIds,
     date,
+    phone,
     email,
     createdAt: new Date().toISOString(),
   };
@@ -164,11 +166,28 @@ const deleteRegistration = async (registrationId) => {
     .promise();
 };
 
+// Get all registrations by teacherId (for CMS teacher schedule)
+const getRegistrationsByTeacherId = async (teacherId) => {
+  const db = getDynamoClient();
+  const res = await db
+    .query({
+      TableName: tableName,
+      IndexName: "teacherDateIndex",
+      KeyConditionExpression: "teacherId = :teacherId",
+      ExpressionAttributeValues: {
+        ":teacherId": teacherId,
+      },
+    })
+    .promise();
+  return res.Items || [];
+};
+
 module.exports = {
   getRegistrationByUserAndDate,
   getRegistrationByUserTeacherAndDate,
   getRegistrationsByTeacherAndDate,
   getRegistrationsByUserId,
+  getRegistrationsByTeacherId,
   getRegistrationById,
   createRegistration,
   updateRegistrationSlots,
